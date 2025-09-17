@@ -1,0 +1,79 @@
+ARDUINO 
+// dance_floor.ino
+const float R1 = 10000.0; // top resistor (to storage)
+const float R2 = 4700.0; // bottom resistor (to GND)
+const float ADC_REF = 5.0; // ADC reference voltage
+
+
+unsigned long lastLog = 0;
+unsigned long logInterval = 2000; // ms
+
+
+// footfall detection
+const int HIT_THRESHOLD = 80; // ADC diff threshold — tune experimentally
+int baseline = 512;
+
+
+void setup() {
+Serial.begin(115200);
+pinMode(LED_PIN, OUTPUT);
+// calibrate baseline
+baseline = readPiezoRawAvg(50);
+Serial.println("Dance floor firmware started");
+}
+
+
+int readPiezoRawAvg(int n) {
+long sum = 0;
+for (int i=0;i<n;i++) {
+sum += analogRead(PIEZO_PIN);
+delay(2);
+}
+return (int)(sum / n);
+}
+
+
+float readStorageVoltage() {
+int raw = analogRead(STORAGE_PIN);
+float vadc = (raw / 1023.0) * ADC_REF;
+float vstorage = vadc * ((R1 + R2) / R2);
+return vstorage;
+}
+
+
+void loop() {
+int sample = analogRead(PIEZO_PIN);
+int diff = abs(sample - baseline);
+static unsigned long lastHit = 0;
+static int hitCount = 0;
+
+
+if (diff > HIT_THRESHOLD && (millis() - lastHit) > 150) {
+// register a hit
+lastHit = millis();
+hitCount++;
+// visual feedback: brief flash or pattern
+flashLED();
+Serial.print("HIT,");
+Serial.println(millis());
+}
+
+
+if (millis() - lastLog > logInterval) {
+float V = readStorageVoltage();
+Serial.print("STATUS,");
+Serial.print(millis());
+Serial.print(",V=");
+Serial.print(V);
+Serial.print(",hits=");
+Serial.println(hitCount);
+lastLog = millis();
+}
+}
+
+
+void flashLED() {
+analogWrite(LED_PIN, 200);
+delay(80);
+analogWrite(LED_PIN, 0);
+}
